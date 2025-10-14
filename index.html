@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Virtual Museum — Three.js Starter</title>
+  <title>Virtual Museum — Three.js</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    html,body { height:100%; margin:0; overflow:hidden; font-family: sans-serif; background:#111; }
+    html, body { height: 100%; margin: 0; overflow: hidden; font-family: sans-serif; background: #111; }
     #info { position: absolute; left: 12px; top: 12px; color: #ddd; z-index: 5; background: rgba(0,0,0,0.35); padding:8px 10px; border-radius:6px; }
-    #canvas-container { width:100%; height:100%; }
-    .hint { font-size:13px; opacity:0.9; }
+    #canvas-container { width: 100%; height: 100%; }
+    .hint { font-size: 13px; opacity: 0.9; }
   </style>
 </head>
 <body>
@@ -18,14 +18,12 @@
   </div>
   <div id="canvas-container"></div>
 
-  <!-- Three.js and extras from CDN -->
-  <script src="https://unpkg.com/three@0.154.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.154.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://unpkg.com/three@0.154.0/examples/js/loaders/TextureLoader.js"></script>
-  <script src="https://unpkg.com/dat.gui@0.7.9/build/dat.gui.min.js"></script>
+  <!-- Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
 
   <script>
-  // Basic scene, camera, renderer
+  // ------------------ Scene Setup ------------------
   const container = document.getElementById('canvas-container');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x101216);
@@ -40,162 +38,262 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Controls
-  const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 1.5, 0);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
+  // ------------------ Controls (manual implementation) ------------------
+  let isDragging = false;
+  let isRightDragging = false;
+  let previousMousePosition = { x: 0, y: 0 };
+  let cameraRotation = { x: 0, y: 0 };
+  let cameraDistance = 10;
+  let targetPosition = new THREE.Vector3(0, 1.5, 0);
+  
+  renderer.domElement.addEventListener('mousedown', (e) => {
+    if (e.button === 0) {
+      isDragging = true;
+    } else if (e.button === 2) {
+      isRightDragging = true;
+    }
+    previousMousePosition = { x: e.clientX, y: e.clientY };
+  });
 
-  // Lights
-  const ambient = new THREE.AmbientLight(0xffffff, 0.15);
-  scene.add(ambient);
+  renderer.domElement.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+      const deltaX = e.clientX - previousMousePosition.x;
+      const deltaY = e.clientY - previousMousePosition.y;
+      
+      cameraRotation.y += deltaX * 0.005;
+      cameraRotation.x += deltaY * 0.005;
+      cameraRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotation.x));
+      
+      updateCameraPosition();
+    } else if (isRightDragging) {
+      const deltaX = e.clientX - previousMousePosition.x;
+      const deltaY = e.clientY - previousMousePosition.y;
+      
+      const right = new THREE.Vector3();
+      camera.getWorldDirection(right);
+      right.cross(camera.up).normalize();
+      
+      const up = new THREE.Vector3(0, 1, 0);
+      
+      targetPosition.add(right.multiplyScalar(-deltaX * 0.01));
+      targetPosition.add(up.multiplyScalar(deltaY * 0.01));
+      
+      updateCameraPosition();
+    }
+    previousMousePosition = { x: e.clientX, y: e.clientY };
+  });
 
-  const dir = new THREE.DirectionalLight(0xfff3e0, 0.6);
-  dir.position.set(5, 10, 5);
-  dir.castShadow = true;
-  dir.shadow.mapSize.set(2048,2048);
-  dir.shadow.camera.left = -12; dir.shadow.camera.right = 12; dir.shadow.camera.top = 12; dir.shadow.camera.bottom = -12;
-  dir.shadow.camera.near = 1; dir.shadow.camera.far = 50;
-  scene.add(dir);
+  renderer.domElement.addEventListener('mouseup', () => {
+    isDragging = false;
+    isRightDragging = false;
+  });
+
+  renderer.domElement.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    cameraDistance += e.deltaY * 0.01;
+    cameraDistance = Math.max(2, Math.min(50, cameraDistance));
+    updateCameraPosition();
+  });
+
+  renderer.domElement.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+
+  function updateCameraPosition() {
+    const x = targetPosition.x + cameraDistance * Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x);
+    const y = targetPosition.y + cameraDistance * Math.sin(cameraRotation.x);
+    const z = targetPosition.z + cameraDistance * Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x);
+    
+    camera.position.set(x, y, z);
+    camera.lookAt(targetPosition);
+  }
+  
+  updateCameraPosition();
+
+  // ------------------ Lights ------------------
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+  scene.add(ambientLight);
+
+  const directionalLight = new THREE.DirectionalLight(0xfff3e0, 0.6);
+  directionalLight.position.set(5, 10, 5);
+  directionalLight.castShadow = true;
+  directionalLight.shadow.mapSize.set(2048, 2048);
+  directionalLight.shadow.camera.left = -12; 
+  directionalLight.shadow.camera.right = 12; 
+  directionalLight.shadow.camera.top = 12; 
+  directionalLight.shadow.camera.bottom = -12;
+  directionalLight.shadow.camera.near = 1; 
+  directionalLight.shadow.camera.far = 50;
+  scene.add(directionalLight);
 
   // Spotlights for exhibits
-  function makeSpot(x,z,intensity=1){
-    const s = new THREE.SpotLight(0xffffff, intensity, 20, Math.PI/6, 0.6, 1);
-    s.position.set(x, 6, z);
-    s.castShadow = true;
-    s.shadow.mapSize.set(1024,1024);
-    scene.add(s);
-    return s;
+  function makeSpot(x, z, intensity=1) {
+    const spot = new THREE.SpotLight(0xffffff, intensity, 20, Math.PI/6, 0.6, 1);
+    spot.position.set(x, 6, z);
+    spot.castShadow = true;
+    spot.shadow.mapSize.set(1024, 1024);
+    scene.add(spot);
+    return spot;
   }
   const spot1 = makeSpot(-3, -1, 1.2);
   const spot2 = makeSpot(0, -1, 1.2);
   const spot3 = makeSpot(3, -1, 1.2);
 
-  // Room: floor + 4 walls + ceiling
+  // ------------------ Room ------------------
   const room = new THREE.Group();
-  const floorGeo = new THREE.PlaneGeometry(18, 18);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x9b7b4a, roughness: 0.8 });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
+
+  // Floor
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(18, 18),
+    new THREE.MeshStandardMaterial({ color: 0x9b7b4a, roughness: 0.8 })
+  );
   floor.rotation.x = -Math.PI/2;
   floor.receiveShadow = true;
   room.add(floor);
 
-  function wall(w,h,x,y,z,ry){
-    const g = new THREE.PlaneGeometry(w,h);
-    const m = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness:0.9 });
-    const mesh = new THREE.Mesh(g,m);
-    mesh.position.set(x,y,z);
-    mesh.rotation.y = ry || 0;
+  // Walls
+  function wall(w, h, x, y, z, ry=0) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.9 })
+    );
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = ry;
     mesh.receiveShadow = true;
     return mesh;
   }
-  // back wall
-  room.add(wall(18,8,0,4,-9,0));
-  // front wall (behind camera) - make slightly darker
-  const front = wall(18,8,0,4,9,Math.PI);
-  front.material.color.setHex(0xeeeeee);
-  room.add(front);
-  // left & right
-  room.add(wall(18,8,-9,4,0,Math.PI/2));
-  room.add(wall(18,8,9,4,0,-Math.PI/2));
-  // ceiling
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(18,18), new THREE.MeshStandardMaterial({ color:0xf7f7f7, roughness:1 }));
-  ceil.rotation.x = Math.PI/2; ceil.position.y = 8;
-  room.add(ceil);
+  room.add(wall(18, 8, 0, 4, -9, 0));           // back wall
+  const frontWall = wall(18, 8, 0, 4, 9, Math.PI);
+  frontWall.material.color.setHex(0xeeeeee);
+  room.add(frontWall);
+  room.add(wall(18, 8, -9, 4, 0, Math.PI/2));   // left
+  room.add(wall(18, 8, 9, 4, 0, -Math.PI/2));   // right
+
+  // Ceiling
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(18, 18),
+    new THREE.MeshStandardMaterial({ color: 0xf7f7f7, roughness: 1 })
+  );
+  ceiling.rotation.x = Math.PI/2;
+  ceiling.position.y = 8;
+  room.add(ceiling);
 
   scene.add(room);
 
-  // Plinths (display stands)
-  function makePlinth(x,z){
-    const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,1.2,32), new THREE.MeshStandardMaterial({ color:0xffffff, roughness:0.85 }));
+  // ------------------ Plinths & Exhibits ------------------
+  function makePlinth(x, z) {
+    const plinth = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.9, 0.9, 1.2, 32),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 })
+    );
     plinth.position.set(x, 0.6, z);
     plinth.castShadow = true;
     plinth.receiveShadow = true;
     return plinth;
   }
-  const p1 = makePlinth(-3, -1);
-  const p2 = makePlinth(0, -1);
-  const p3 = makePlinth(3, -1);
-  scene.add(p1,p2,p3);
+  const plinths = [makePlinth(-3, -1), makePlinth(0, -1), makePlinth(3, -1)];
+  scene.add(...plinths);
 
-  // Exhibits: use primitives with different materials to demonstrate shading
-  const exhibit1 = new THREE.Mesh(new THREE.TorusKnotGeometry(0.6, 0.2, 128, 16), new THREE.MeshStandardMaterial({ color:0xff6666, metalness:0.6, roughness:0.25 }));
-  exhibit1.position.set(-3, 1.4, -1); exhibit1.castShadow = true;
-  const exhibit2 = new THREE.Mesh(new THREE.SphereGeometry(0.8, 64, 32), new THREE.MeshPhysicalMaterial({ color:0x44aaff, metalness:0.0, roughness:0.1, clearcoat:0.2 }));
-  exhibit2.position.set(0, 1.4, -1); exhibit2.castShadow = true;
-  const exhibit3 = new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2), new THREE.MeshStandardMaterial({ color:0x88ff88, metalness:0.2, roughness:0.7 }));
-  exhibit3.position.set(3, 1.4, -1); exhibit3.castShadow = true;
+  // Exhibits
+  const exhibit1 = new THREE.Mesh(
+    new THREE.TorusKnotGeometry(0.6, 0.2, 128, 16),
+    new THREE.MeshStandardMaterial({ color: 0xff6666, metalness: 0.6, roughness: 0.25 })
+  );
+  exhibit1.position.set(-3, 1.4, -1);
+  exhibit1.castShadow = true;
+
+  const exhibit2 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.8, 64, 32),
+    new THREE.MeshStandardMaterial({ color: 0x44aaff, metalness: 0.0, roughness: 0.1 })
+  );
+  exhibit2.position.set(0, 1.4, -1);
+  exhibit2.castShadow = true;
+
+  const exhibit3 = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 1.2, 1.2),
+    new THREE.MeshStandardMaterial({ color: 0x88ff88, metalness: 0.2, roughness: 0.7 })
+  );
+  exhibit3.position.set(3, 1.4, -1);
+  exhibit3.castShadow = true;
+
   scene.add(exhibit1, exhibit2, exhibit3);
 
-  // Add subtle rim lights (point lights) to enhance materials
-  const rim1 = new THREE.PointLight(0xffb3b3, 0.4, 6); rim1.position.set(-4,3,-1); scene.add(rim1);
-  const rim2 = new THREE.PointLight(0xbfe6ff, 0.35, 6); rim2.position.set(0,3,-1); scene.add(rim2);
-  const rim3 = new THREE.PointLight(0xd8ffd8, 0.35, 6); rim3.position.set(4,3,-1); scene.add(rim3);
+  // Rim lights
+  const rimLights = [
+    new THREE.PointLight(0xffb3b3, 0.4, 6),
+    new THREE.PointLight(0xbfe6ff, 0.35, 6),
+    new THREE.PointLight(0xd8ffd8, 0.35, 6)
+  ];
+  rimLights[0].position.set(-4, 3, -1);
+  rimLights[1].position.set(0, 3, -1);
+  rimLights[2].position.set(4, 3, -1);
+  rimLights.forEach(l => scene.add(l));
 
-  // Wall-mounted info plaques (simple plane with basic color)
-  function plaque(x,z,text){
-    const g = new THREE.PlaneGeometry(1.6,0.6);
-    const m = new THREE.MeshBasicMaterial({ color: 0x222222 });
-    const mesh = new THREE.Mesh(g,m);
-    mesh.position.set(x,2.2,z);
+  // ------------------ Wall Plaques ------------------
+  function plaque(x, z, text) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 0.6),
+      new THREE.MeshBasicMaterial({ color: 0x222222 })
+    );
+    mesh.position.set(x, 2.2, z);
     mesh.rotation.y = Math.PI;
     return mesh;
   }
-  const plaq1 = plaque(-3, -7.8, "Exhibit A"); scene.add(plaq1);
-  const plaq2 = plaque(0, -7.8, "Exhibit B"); scene.add(plaq2);
-  const plaq3 = plaque(3, -7.8, "Exhibit C"); scene.add(plaq3);
+  scene.add(plaque(-3, -7.8), plaque(0, -7.8), plaque(3, -7.8));
 
-  // Simple directional shadows on floor using a helper (debugging)
-  // const helper = new THREE.DirectionalLightHelper(dir, 2); scene.add(helper);
-
-  // Resize handler
-  window.addEventListener('resize', onWindowResize);
-  function onWindowResize(){
-    camera.aspect = window.innerWidth/window.innerHeight;
+  // ------------------ Window Resize ------------------
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-  }
+  });
 
-  // GUI controls
+  // ------------------ GUI Controls ------------------
   const gui = new dat.GUI({ width: 300 });
   const cfg = {
-    'ambient': ambient.intensity,
-    'directional': dir.intensity,
-    'spotlights': 1,
-    'fogDensity': 0.02,
-    'showShadows': true
+    ambient: ambientLight.intensity,
+    directional: directionalLight.intensity,
+    spotlights: 1.2,
+    fogDensity: 0.02,
+    showShadows: true
   };
-  gui.add(cfg, 'ambient', 0, 1, 0.01).onChange(v => ambient.intensity = v);
-  gui.add(cfg, 'directional', 0, 2, 0.01).onChange(v => dir.intensity = v);
-  gui.add(cfg, 'spotlights', 0, 2, 0.01).onChange(v => { spot1.intensity = v; spot2.intensity = v; spot3.intensity = v; });
+  gui.add(cfg, 'ambient', 0, 1, 0.01).onChange(v => ambientLight.intensity = v);
+  gui.add(cfg, 'directional', 0, 2, 0.01).onChange(v => directionalLight.intensity = v);
+  gui.add(cfg, 'spotlights', 0, 2, 0.01).onChange(v => {
+    spot1.intensity = spot2.intensity = spot3.intensity = v;
+  });
   gui.add(cfg, 'fogDensity', 0, 0.08, 0.001).onChange(v => scene.fog.density = v);
-  gui.add(cfg, 'showShadows').onChange(v => { renderer.shadowMap.enabled = v; dir.castShadow = v; spot1.castShadow = v; spot2.castShadow = v; spot3.castShadow = v; });
+  gui.add(cfg, 'showShadows').onChange(v => {
+    renderer.shadowMap.enabled = v;
+    directionalLight.castShadow = v;
+    spot1.castShadow = spot2.castShadow = spot3.castShadow = v;
+  });
 
-  // Animation
+  // ------------------ Animation ------------------
   const clock = new THREE.Clock();
-  function animate(){
+  function animate() {
     requestAnimationFrame(animate);
     const t = clock.getElapsedTime();
+
     exhibit1.rotation.y = t * 0.3;
     exhibit2.rotation.x = t * 0.2;
     exhibit3.rotation.y = -t * 0.15;
 
-    controls.update();
     renderer.render(scene, camera);
   }
   animate();
 
-  // Export simple screenshot button (optional)
-  function downloadImage(){
+  // ------------------ Screenshot Shortcut ------------------
+  function downloadImage() {
     const dataURL = renderer.domElement.toDataURL('image/png');
     const a = document.createElement('a');
     a.href = dataURL;
     a.download = 'museum_screenshot.png';
     a.click();
   }
-  // small keyboard shortcut S to save screenshot
-  window.addEventListener('keydown', (e)=>{ if(e.key.toLowerCase() === 's'){ downloadImage(); }});
-
+  window.addEventListener('keydown', e => {
+    if (e.key.toLowerCase() === 's') downloadImage();
+  });
   </script>
 </body>
 </html>
