@@ -1,108 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Frozen 3D Environment - Computer Graphics Project</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Frozen 3D Environment — Lab1 (Enhanced Actors)</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Arial', sans-serif;
             overflow: hidden;
             background: linear-gradient(to bottom, #1a2a4e, #2d4a7c);
         }
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-        }
+        #canvas-container { width: 100vw; height: 100vh; position: relative; }
         #info-panel {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(0, 20, 60, 0.85);
+            background: rgba(0,20,60,0.85);
             color: #a8d8ff;
             padding: 20px;
             border-radius: 10px;
             font-size: 14px;
-            max-width: 300px;
+            max-width: 380px;
             backdrop-filter: blur(10px);
-            border: 2px solid rgba(168, 216, 255, 0.3);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(168,216,255,0.3);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
         }
-        #info-panel h2 {
-            color: #ffffff;
-            margin-bottom: 15px;
-            font-size: 18px;
-            text-shadow: 0 0 10px rgba(168, 216, 255, 0.5);
-        }
-        #info-panel p {
-            margin: 8px 0;
-            line-height: 1.6;
-        }
-        .control-key {
-            background: rgba(168, 216, 255, 0.2);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-weight: bold;
-            color: #ffffff;
-        }
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #ffffff;
-            font-size: 24px;
-            text-align: center;
-            text-shadow: 0 0 20px rgba(168, 216, 255, 0.8);
-        }
-        .spinner {
-            border: 4px solid rgba(168, 216, 255, 0.3);
-            border-top: 4px solid #a8d8ff;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        #info-panel h2 { color: #ffffff; margin-bottom: 12px; font-size: 18px; text-shadow: 0 0 10px rgba(168,216,255,0.5); }
+        #info-panel p { margin: 8px 0; line-height: 1.6; }
+        .control-key { background: rgba(168,216,255,0.2); padding: 2px 6px; border-radius: 3px; font-weight: bold; color: #ffffff; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #ffffff; font-size: 24px; text-align: center; text-shadow: 0 0 20px rgba(168,216,255,0.8); z-index: 10; }
+        .spinner { border: 4px solid rgba(168,216,255,0.3); border-top: 4px solid #a8d8ff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #legend { margin-top: 10px; font-size: 12px; color: #8ab8e6; }
     </style>
 </head>
 <body>
     <div id="canvas-container"></div>
-    
+
     <div id="loading">
         <div class="spinner"></div>
         <p>Loading Arendelle...</p>
     </div>
-    
+
     <div id="info-panel">
-        <h2>❄️ Frozen 3D Environment</h2>
+        <h2>❄ Frozen 3D Environment — Lab1</h2>
         <p><span class="control-key">Mouse</span> - Rotate & Zoom</p>
         <p><span class="control-key">Space</span> - Toggle Animation</p>
         <p><span class="control-key">A</span> - Toggle Aurora</p>
         <p><span class="control-key">S</span> - Toggle Snow</p>
         <p><span class="control-key">L</span> - Toggle Lights</p>
-        <p style="margin-top: 15px; font-size: 12px; color: #8ab8e6;">
-            Computer Graphics Project<br>
-            Three.js WebGL Rendering
-        </p>
+        <p><span class="control-key">R</span> - Toggle Reindeers (actors)</p>
+        <p><span class="control-key">M</span> - Toggle Snowmen (actors)</p>
+        <p><span class="control-key">D</span> - Toggle All Actors</p>
+        <div id="legend">
+            Actors: exactly 3 Reindeers (animated with walking motion), Snowmen, Lanterns, Ice sculptures, Olaf and Anna (image characters).
+            Snow spawn is blocked inside the castle area.
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // ============================================
-        // GLOBAL VARIABLES AND SCENE SETUP
-        // ============================================
-        let scene, camera, renderer, controls;
+        // GLOBALS
+        let scene, camera, renderer;
         let castleGroup, snowParticles, auroraPlane, lake;
         let animationEnabled = true;
         let auroraEnabled = true;
@@ -110,28 +70,27 @@
         let lightsEnabled = true;
         let time = 0;
 
-        // Lighting references
         let ambientLight, directionalLight, castleLight1, castleLight2, auroraLight;
 
-        // ============================================
-        // INITIALIZATION FUNCTION
-        // ============================================
+        let actorsGroup;
+        let reindeers = [];
+        let snowmen = [];
+        let lanterns = [];
+        let characters = [];
+        let actorsEnabled = true;
+
+        const castleExclusionRadius = 18;
+
+        const OLAF_URL = 'https://www.shutterstock.com/image-photo/disney-frozen-olaf-600nw-2605595779.jpg';
+        const ANNA_URL = 'https://upload.wikimedia.org/wikipedia/en/thumb/8/8a/Anna_Frozen.png/120px-Anna_Frozen.png';
+
         function init() {
-            // Create scene with fog for depth perception
             scene = new THREE.Scene();
             scene.fog = new THREE.Fog(0x1a2a4e, 50, 300);
 
-            // Setup camera with perspective projection
-            // FOV: 60 degrees, Aspect ratio: window, Near: 0.1, Far: 1000
-            camera = new THREE.PerspectiveCamera(
-                60,
-                window.innerWidth / window.innerHeight,
-                0.1,
-                1000
-            );
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(50, 30, 50);
 
-            // WebGL Renderer setup with antialiasing
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -139,10 +98,7 @@
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-            // Orbit Controls for interactive camera manipulation
             setupControls();
-
-            // Create scene components
             createLighting();
             createTerrain();
             createCastle();
@@ -150,22 +106,14 @@
             createLake();
             createAurora();
             createSnowParticles();
-
-            // Event listeners
+            createActors();
             setupEventListeners();
 
-            // Hide loading screen
             document.getElementById('loading').style.display = 'none';
-
-            // Start animation loop
             animate();
         }
 
-        // ============================================
-        // ORBIT CONTROLS SETUP
-        // ============================================
         function setupControls() {
-            // Manual OrbitControls implementation (simplified)
             let isDragging = false;
             let previousMousePosition = { x: 0, y: 0 };
             let cameraRotation = { theta: 0, phi: Math.PI / 6 };
@@ -180,19 +128,16 @@
                 if (isDragging) {
                     const deltaX = e.clientX - previousMousePosition.x;
                     const deltaY = e.clientY - previousMousePosition.y;
-
                     cameraRotation.theta -= deltaX * 0.01;
                     cameraRotation.phi -= deltaY * 0.01;
                     cameraRotation.phi = Math.max(0.1, Math.min(Math.PI / 2, cameraRotation.phi));
-
                     updateCameraPosition();
                     previousMousePosition = { x: e.clientX, y: e.clientY };
                 }
             });
 
-            renderer.domElement.addEventListener('mouseup', () => {
-                isDragging = false;
-            });
+            renderer.domElement.addEventListener('mouseup', () => { isDragging = false; });
+            renderer.domElement.addEventListener('mouseleave', () => { isDragging = false; });
 
             renderer.domElement.addEventListener('wheel', (e) => {
                 e.preventDefault();
@@ -211,16 +156,11 @@
             updateCameraPosition();
         }
 
-        // ============================================
-        // LIGHTING SETUP - Ambient, Directional, Point Lights
-        // ============================================
         function createLighting() {
-            // Ambient light for overall scene illumination
-            ambientLight = new THREE.AmbientLight(0x6699cc, 0.4);
+            ambientLight = new THREE.AmbientLight(0x6699cc, 0.5);
             scene.add(ambientLight);
 
-            // Directional light simulating sunlight/moonlight
-            directionalLight = new THREE.DirectionalLight(0xaaccff, 0.8);
+            directionalLight = new THREE.DirectionalLight(0xaaccff, 0.9);
             directionalLight.position.set(50, 80, 30);
             directionalLight.castShadow = true;
             directionalLight.shadow.mapSize.width = 2048;
@@ -233,7 +173,6 @@
             directionalLight.shadow.camera.bottom = -100;
             scene.add(directionalLight);
 
-            // Point lights inside castle for glow effect
             castleLight1 = new THREE.PointLight(0x88ccff, 1.5, 50);
             castleLight1.position.set(0, 25, 0);
             scene.add(castleLight1);
@@ -242,28 +181,20 @@
             castleLight2.position.set(0, 35, 0);
             scene.add(castleLight2);
 
-            // Aurora-colored light
             auroraLight = new THREE.PointLight(0x00ff88, 0.5, 100);
             auroraLight.position.set(0, 60, -30);
             scene.add(auroraLight);
         }
 
-        // ============================================
-        // TERRAIN CREATION - Snow-covered ground
-        // ============================================
         function createTerrain() {
-            // Create ground plane with snow material
             const groundGeometry = new THREE.PlaneGeometry(200, 200, 50, 50);
-            
-            // Add some height variation for terrain
             const vertices = groundGeometry.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
-                vertices[i + 2] = Math.random() * 3 - 1; // Random height
+                vertices[i + 2] = Math.random() * 3 - 1;
             }
             groundGeometry.attributes.position.needsUpdate = true;
             groundGeometry.computeVertexNormals();
 
-            // Snow material with Phong shading
             const groundMaterial = new THREE.MeshPhongMaterial({
                 color: 0xffffff,
                 shininess: 60,
@@ -277,23 +208,11 @@
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Add some rocky outcrops
             for (let i = 0; i < 15; i++) {
-                const rockGeometry = new THREE.SphereGeometry(
-                    Math.random() * 3 + 1,
-                    8,
-                    8
-                );
-                const rockMaterial = new THREE.MeshPhongMaterial({
-                    color: 0xaabbcc,
-                    shininess: 10
-                });
+                const rockGeometry = new THREE.SphereGeometry(Math.random() * 3 + 1, 8, 8);
+                const rockMaterial = new THREE.MeshPhongMaterial({ color: 0xaabbcc, shininess: 10 });
                 const rock = new THREE.Mesh(rockGeometry, rockMaterial);
-                rock.position.set(
-                    Math.random() * 100 - 50,
-                    -1,
-                    Math.random() * 100 - 50
-                );
+                rock.position.set(Math.random() * 100 - 50, -1, Math.random() * 100 - 50);
                 rock.scale.y = 0.5;
                 rock.receiveShadow = true;
                 rock.castShadow = true;
@@ -301,13 +220,9 @@
             }
         }
 
-        // ============================================
-        // ICE CASTLE CREATION - Polygonal modeling
-        // ============================================
         function createCastle() {
             castleGroup = new THREE.Group();
 
-            // Ice material with high reflectivity (Phong shading)
             const iceMaterial = new THREE.MeshPhongMaterial({
                 color: 0xaaddff,
                 transparent: true,
@@ -317,7 +232,6 @@
                 reflectivity: 0.9
             });
 
-            // Main castle base
             const baseGeometry = new THREE.BoxGeometry(20, 20, 20);
             const base = new THREE.Mesh(baseGeometry, iceMaterial);
             base.position.y = 10;
@@ -325,13 +239,8 @@
             base.receiveShadow = true;
             castleGroup.add(base);
 
-            // Castle towers (4 corner towers)
-            const towerPositions = [
-                [-8, 0, -8], [8, 0, -8], [-8, 0, 8], [8, 0, 8]
-            ];
-            
+            const towerPositions = [[-8, 0, -8], [8, 0, -8], [-8, 0, 8], [8, 0, 8]];
             towerPositions.forEach(pos => {
-                // Tower cylinder
                 const towerGeometry = new THREE.CylinderGeometry(3, 4, 30, 8);
                 const tower = new THREE.Mesh(towerGeometry, iceMaterial);
                 tower.position.set(pos[0], pos[1] + 25, pos[2]);
@@ -339,42 +248,30 @@
                 tower.receiveShadow = true;
                 castleGroup.add(tower);
 
-                // Tower cone roof
                 const roofGeometry = new THREE.ConeGeometry(4.5, 8, 8);
                 const roof = new THREE.Mesh(roofGeometry, iceMaterial);
                 roof.position.set(pos[0], pos[1] + 44, pos[2]);
                 roof.castShadow = true;
                 castleGroup.add(roof);
 
-                // Glowing window
                 const windowGeometry = new THREE.SphereGeometry(0.8, 8, 8);
-                const windowMaterial = new THREE.MeshBasicMaterial({
-                    color: 0xffeeaa,
-                    transparent: true,
-                    opacity: 0.9
-                });
+                const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xffeeaa, transparent: true, opacity: 0.9 });
                 const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
                 window1.position.set(pos[0], pos[1] + 30, pos[2] > 0 ? pos[2] + 4 : pos[2] - 4);
                 castleGroup.add(window1);
             });
 
-            // Central spire
             const spireGeometry = new THREE.ConeGeometry(5, 40, 6);
             const spire = new THREE.Mesh(spireGeometry, iceMaterial);
             spire.position.y = 45;
             spire.castShadow = true;
             castleGroup.add(spire);
 
-            // Decorative ice crystals on top
             for (let i = 0; i < 5; i++) {
                 const crystalGeometry = new THREE.OctahedronGeometry(2);
                 const crystal = new THREE.Mesh(crystalGeometry, iceMaterial);
                 const angle = (i / 5) * Math.PI * 2;
-                crystal.position.set(
-                    Math.cos(angle) * 8,
-                    22,
-                    Math.sin(angle) * 8
-                );
+                crystal.position.set(Math.cos(angle) * 8, 22, Math.sin(angle) * 8);
                 crystal.rotation.z = Math.random() * Math.PI;
                 castleGroup.add(crystal);
             }
@@ -382,30 +279,18 @@
             scene.add(castleGroup);
         }
 
-        // ============================================
-        // PINE TREES - Snow-covered forest
-        // ============================================
         function createTrees() {
-            const treeMaterial = new THREE.MeshPhongMaterial({
-                color: 0x1a4d2e,
-                shininess: 5
-            });
-            const snowMaterial = new THREE.MeshPhongMaterial({
-                color: 0xffffff,
-                shininess: 30
-            });
+            const treeMaterial = new THREE.MeshPhongMaterial({ color: 0x1a4d2e, shininess: 5 });
+            const snowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 30 });
 
             for (let i = 0; i < 30; i++) {
                 const treeGroup = new THREE.Group();
-
-                // Tree trunk
                 const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.8, 5, 8);
                 const trunk = new THREE.Mesh(trunkGeometry, treeMaterial);
                 trunk.position.y = 2.5;
                 trunk.castShadow = true;
                 treeGroup.add(trunk);
 
-                // Tree foliage (3 cone layers)
                 for (let j = 0; j < 3; j++) {
                     const coneGeometry = new THREE.ConeGeometry(3 - j * 0.5, 5, 8);
                     const cone = new THREE.Mesh(coneGeometry, treeMaterial);
@@ -413,16 +298,11 @@
                     cone.castShadow = true;
                     treeGroup.add(cone);
 
-                    // Snow on top of each layer
-                    const snowCone = new THREE.Mesh(
-                        new THREE.ConeGeometry(3.2 - j * 0.5, 1, 8),
-                        snowMaterial
-                    );
+                    const snowCone = new THREE.Mesh(new THREE.ConeGeometry(3.2 - j * 0.5, 1, 8), snowMaterial);
                     snowCone.position.y = 7.5 + j * 3;
                     treeGroup.add(snowCone);
                 }
 
-                // Random positioning around the scene (avoid center)
                 let x, z;
                 do {
                     x = Math.random() * 120 - 60;
@@ -435,9 +315,6 @@
             }
         }
 
-        // ============================================
-        // FROZEN LAKE - Reflective surface
-        // ============================================
         function createLake() {
             const lakeGeometry = new THREE.CircleGeometry(25, 32);
             const lakeMaterial = new THREE.MeshPhongMaterial({
@@ -455,47 +332,26 @@
             lake.receiveShadow = true;
             scene.add(lake);
 
-            // Add ice chunks
             for (let i = 0; i < 8; i++) {
                 const iceGeometry = new THREE.DodecahedronGeometry(Math.random() * 2 + 1);
-                const iceMaterial = new THREE.MeshPhongMaterial({
-                    color: 0xcceeFF,
-                    transparent: true,
-                    opacity: 0.8,
-                    shininess: 100
-                });
+                const iceMaterial = new THREE.MeshPhongMaterial({ color: 0xcceeFF, transparent: true, opacity: 0.8, shininess: 100 });
                 const iceChunk = new THREE.Mesh(iceGeometry, iceMaterial);
                 const angle = (i / 8) * Math.PI * 2;
                 const radius = 15 + Math.random() * 8;
-                iceChunk.position.set(
-                    35 + Math.cos(angle) * radius,
-                    0.5,
-                    35 + Math.sin(angle) * radius
-                );
-                iceChunk.rotation.set(
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI
-                );
+                iceChunk.position.set(35 + Math.cos(angle) * radius, 0.5, 35 + Math.sin(angle) * radius);
+                iceChunk.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
                 scene.add(iceChunk);
             }
         }
 
-        // ============================================
-        // AURORA BOREALIS - Animated sky effect
-        // ============================================
         function createAurora() {
-            // Create aurora using a large textured plane
             const auroraGeometry = new THREE.PlaneGeometry(150, 80, 32, 32);
-            
-            // Modify geometry for wave effect
             const vertices = auroraGeometry.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
                 vertices[i + 2] = Math.sin(vertices[i] * 0.1) * 3;
             }
             auroraGeometry.attributes.position.needsUpdate = true;
 
-            // Aurora material with gradient colors
             const auroraMaterial = new THREE.MeshBasicMaterial({
                 color: 0x00ff88,
                 transparent: true,
@@ -509,7 +365,6 @@
             auroraPlane.rotation.x = Math.PI / 6;
             scene.add(auroraPlane);
 
-            // Add second aurora layer
             const aurora2 = auroraPlane.clone();
             aurora2.material = auroraMaterial.clone();
             aurora2.material.color.setHex(0x4488ff);
@@ -518,20 +373,23 @@
             scene.add(aurora2);
         }
 
-        // ============================================
-        // SNOW PARTICLE SYSTEM
-        // ============================================
         function createSnowParticles() {
             const particleCount = 5000;
             const particles = new THREE.BufferGeometry();
             const positions = new Float32Array(particleCount * 3);
             const velocities = [];
 
-            // Initialize particle positions and velocities
             for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] = Math.random() * 200 - 100;
-                positions[i * 3 + 1] = Math.random() * 100;
-                positions[i * 3 + 2] = Math.random() * 200 - 100;
+                let x, y, z;
+                do {
+                    x = Math.random() * 200 - 100;
+                    y = Math.random() * 100;
+                    z = Math.random() * 200 - 100;
+                } while (Math.sqrt(x * x + z * z) < castleExclusionRadius && y < 60);
+
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
 
                 velocities.push({
                     x: Math.random() * 0.1 - 0.05,
@@ -553,23 +411,299 @@
 
             snowParticles = new THREE.Points(particles, particleMaterial);
             scene.add(snowParticles);
+        }function createActors() {
+    actorsGroup = new THREE.Group();
+    scene.add(actorsGroup);
+
+    const lanternPositions = [
+        [-18, 0, -10], [-10, 0, -18], [10, 0, -18], [18, 0, -10],
+        [-18, 0, 10],  [-10, 0, 18],  [10, 0, 18],  [18, 0, 10]
+    ];
+    lanternPositions.forEach(p => {
+        lanterns.push(createLantern(new THREE.Vector3(p[0], 0, p[2])));
+    });
+
+    // Snowmen positioned outside the four tower pillars of the castle
+    // Castle towers are at positions: [-8, -8], [8, -8], [-8, 8], [8, 8]
+    // Place snowmen just outside each tower
+    snowmen.push(createSnowman(new THREE.Vector3(-15, 0, -15))); // outside back-left tower
+    snowmen.push(createSnowman(new THREE.Vector3(15, 0, -15)));  // outside back-right tower
+    snowmen.push(createSnowman(new THREE.Vector3(-15, 0, 15)));  // outside front-left tower
+    snowmen.push(createSnowman(new THREE.Vector3(15, 0, 15)));   // outside front-right tower
+
+    // Reindeers near the lake area (right side), walking around
+    reindeers.push(createReindeer(new THREE.Vector3(50, 0, 40), 0));
+    reindeers.push(createReindeer(new THREE.Vector3(30, 0, 50), 1));
+    reindeers.push(createReindeer(new THREE.Vector3(45, 0, 30), 2));
+
+    // Anna positioned clearly in front, away from trees (trees avoid center 25x25 area)
+    characters.push(createImageCharacter(ANNA_URL, new THREE.Vector3(0, 0, 18), 11));
+
+    placeIceSculpturesAroundCastle();
+
+    lanterns.forEach(l => actorsGroup.add(l.group));
+    snowmen.forEach(s => actorsGroup.add(s.group));
+    reindeers.forEach(r => actorsGroup.add(r.group));
+    characters.forEach(c => actorsGroup.add(c.group));
+
+    actorsGroup.visible = actorsEnabled;
+}
+
+        function createLantern(position) {
+            const group = new THREE.Group();
+            group.position.copy(position);
+
+            const poleGeom = new THREE.CylinderGeometry(0.1, 0.1, 4, 6);
+            const poleMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const pole = new THREE.Mesh(poleGeom, poleMat);
+            pole.position.y = 2;
+            pole.castShadow = true;
+            group.add(pole);
+
+            const lampGeom = new THREE.SphereGeometry(0.6, 8, 8);
+            const lampMat = new THREE.MeshBasicMaterial({ color: 0xffeaa3 });
+            const lamp = new THREE.Mesh(lampGeom, lampMat);
+            lamp.position.y = 3.2;
+            group.add(lamp);
+
+            const light = new THREE.PointLight(0xffeaa3, 0.8, 12);
+            light.position.set(0, 3.2, 0);
+            group.add(light);
+
+            return { group, light, lamp, baseIntensity: 0.8, flickerSpeed: 2 + Math.random() * 2 };
         }
 
-        // ============================================
-        // ANIMATION LOOP
-        // ============================================
+        function createSnowman(position) {
+            const group = new THREE.Group();
+            group.position.copy(position);
+
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 40 });
+            const coalMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
+            const carrotMat = new THREE.MeshPhongMaterial({ color: 0xff7f00 });
+            const hatMat = new THREE.MeshPhongMaterial({ color: 0x000000 });
+
+            const bottom = new THREE.Mesh(new THREE.SphereGeometry(3.2, 16, 16), bodyMat);
+            bottom.position.y = 3.2;
+            bottom.castShadow = true;
+            group.add(bottom);
+
+            const mid = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 16), bodyMat);
+            mid.position.y = 7.0;
+            mid.castShadow = true;
+            group.add(mid);
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(1.6, 16, 16), bodyMat);
+            head.position.y = 9.8;
+            head.castShadow = true;
+            group.add(head);
+
+            const eye1 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), coalMat);
+            const eye2 = eye1.clone();
+            eye1.position.set(0.5, 10.1, 1.4);
+            eye2.position.set(-0.5, 10.1, 1.4);
+            group.add(eye1, eye2);
+
+            const nose = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1.4, 8), carrotMat);
+            nose.position.set(0, 9.7, 2.0);
+            nose.rotation.x = Math.PI / 2;
+            group.add(nose);
+
+            const hatBase = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 0.3, 12), hatMat);
+            hatBase.position.set(0, 11.5, 0);
+            group.add(hatBase);
+
+            const hatTop = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.8, 12), hatMat);
+            hatTop.position.set(0, 12.5, 0);
+            group.add(hatTop);
+
+            for (let i = 0; i < 3; i++) {
+                const button = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), coalMat);
+                button.position.set(0, 7.5 - i * 0.7, 2.2);
+                group.add(button);
+            }
+
+            return { group, baseY: group.position.y, bobOffset: Math.random() * Math.PI, bobSpeed: 1 + Math.random() * 1.5 };
+        }
+
+        function createReindeer(position, id) {
+            const group = new THREE.Group();
+            group.position.copy(position);
+
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0x8B4513, shininess: 30 });
+            const darkMat = new THREE.MeshPhongMaterial({ color: 0x654321, shininess: 20 });
+            const noseMat = new THREE.MeshPhongMaterial({ color: 0xff3333, emissive: 0xff0000, emissiveIntensity: 0.5 });
+            const antlerMat = new THREE.MeshPhongMaterial({ color: 0xd2b48c, shininess: 10 });
+            const eyeMat = new THREE.MeshPhongMaterial({ color: 0x000000 });
+            const bellyMat = new THREE.MeshPhongMaterial({ color: 0xa0826d, shininess: 25 });
+
+            const body = new THREE.Mesh(new THREE.SphereGeometry(2.5, 16, 16), bodyMat);
+            body.scale.set(1.6, 1.3, 1.1);
+            body.position.y = 4;
+            body.castShadow = true;
+            group.add(body);
+
+            const belly = new THREE.Mesh(new THREE.SphereGeometry(2.3, 16, 16), bellyMat);
+            belly.scale.set(1.3, 1.1, 0.9);
+            belly.position.set(0, 3.8, 0.8);
+            group.add(belly);
+
+            const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 3.5, 12), bodyMat);
+            neck.position.set(0, 6, 2.5);
+            neck.rotation.x = -0.4;
+            neck.castShadow = true;
+            group.add(neck);
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), bodyMat);
+            head.scale.set(1, 1.1, 1.4);
+            head.position.set(0, 8.2, 4);
+            head.castShadow = true;
+            group.add(head);
+
+            const snout = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), darkMat);
+            snout.scale.set(0.8, 0.7, 1.3);
+            snout.position.set(0, 7.8, 5.2);
+            group.add(snout);
+
+            const nose = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), noseMat);
+            nose.position.set(0, 7.6, 6.2);
+            group.add(nose);
+
+            const noseLight = new THREE.PointLight(0xff0000, 0.8, 8);
+            noseLight.position.set(0, 7.6, 6.5);
+            group.add(noseLight);
+
+            const eye1 = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), eyeMat);
+            const eye2 = eye1.clone();
+            eye1.position.set(0.6, 8.5, 5);
+            eye2.position.set(-0.6, 8.5, 5);
+            group.add(eye1, eye2);
+
+            const earGeom = new THREE.ConeGeometry(0.6, 1.8, 8);
+            const ear1 = new THREE.Mesh(earGeom, bodyMat);
+            const ear2 = ear1.clone();
+            ear1.position.set(0.9, 9.5, 3.8);
+            ear2.position.set(-0.9, 9.5, 3.8);
+            ear1.rotation.z = -0.3;
+            ear2.rotation.z = 0.3;
+            group.add(ear1, ear2);
+
+            const antlerBase1 = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 2, 8), antlerMat);
+            const antlerBase2 = antlerBase1.clone();
+            antlerBase1.position.set(0.7, 9.8, 3.5);
+            antlerBase2.position.set(-0.7, 9.8, 3.5);
+            antlerBase1.rotation.z = -0.4;
+            antlerBase2.rotation.z = 0.4;
+            group.add(antlerBase1, antlerBase2);
+
+            for (let side = -1; side <= 1; side += 2) {
+                const branch1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 1.2, 6), antlerMat);
+                branch1.position.set(side * 0.8, 10.8, 3.4);
+                branch1.rotation.set(0.3, side * 0.5, side * -0.6);
+                group.add(branch1);
+
+                const branch2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 1, 6), antlerMat);
+                branch2.position.set(side * 0.9, 10.3, 3.6);
+                branch2.rotation.set(-0.3, side * -0.3, side * -0.5);
+                group.add(branch2);
+            }
+
+            const legPositions = [
+                [1.5, 0, 1.5], [-1.5, 0, 1.5],
+                [1.5, 0, -1], [-1.5, 0, -1]
+            ];
+
+            const legs = [];
+            legPositions.forEach((pos, idx) => {
+                const legGroup = new THREE.Group();
+                
+                const upperLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.35, 2.5, 8), bodyMat);
+                upperLeg.position.y = 1.5;
+                upperLeg.castShadow = true;
+                legGroup.add(upperLeg);
+
+                const lowerLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.25, 1.5, 8), darkMat);
+                lowerLeg.position.y = 0.4;
+                legGroup.add(lowerLeg);
+
+                const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.6), new THREE.MeshPhongMaterial({ color: 0x2c1810 }));
+                hoof.position.y = -0.2;
+                legGroup.add(hoof);
+
+                legGroup.position.set(pos[0], pos[1] + 0.5, pos[2]);
+                group.add(legGroup);
+                legs.push(legGroup);
+            });
+
+            const tail = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.5, 8), bodyMat);
+            tail.position.set(0, 4.5, -2.5);
+            tail.rotation.x = Math.PI / 3;
+            group.add(tail);
+
+            return {
+                group,
+                legs,
+                noseLight,
+                walkPhase: Math.random() * Math.PI * 2,
+                walkSpeed: 0.8 + Math.random() * 0.4,
+                direction: Math.random() * Math.PI * 2,
+                bobOffset: Math.random() * Math.PI,
+                id
+            };
+        }
+
+        function createImageCharacter(imagePath, position, height) {
+            const group = new THREE.Group();
+            group.position.copy(position);
+
+            const geom = new THREE.PlaneGeometry(1, 1);
+            const mat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.y = height / 2;
+            group.add(mesh);
+
+            const loader = new THREE.TextureLoader();
+            loader.load(
+                imagePath,
+                (texture) => {
+                    texture.encoding = THREE.sRGBEncoding;
+                    mat.map = texture;
+                    mat.needsUpdate = true;
+                    const img = texture.image;
+                    const aspect = (img && img.width && img.height) ? (img.width / img.height) : 1;
+                    mesh.scale.set(aspect * height, height, 1);
+                },
+                undefined,
+                (err) => {
+                    console.warn('Failed to load texture', imagePath, err);
+                }
+            );
+
+            return { group, mesh, imagePath };
+        }
+
+        function placeIceSculpturesAroundCastle() {
+            const iceMat = new THREE.MeshPhongMaterial({ color: 0xbfefff, transparent: true, opacity: 0.9, shininess: 80 });
+            for (let i = 0; i < 6; i++) {
+                const geom = new THREE.OctahedronGeometry(1 + Math.random() * 2);
+                const mesh = new THREE.Mesh(geom, iceMat);
+                const angle = Math.random() * Math.PI * 2;
+                const r = 10 + Math.random() * 6;
+                mesh.position.set(Math.cos(angle) * r, 1 + Math.random() * 0.8, Math.sin(angle) * r);
+                mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                scene.add(mesh);
+            }
+        }
+
         function animate() {
             requestAnimationFrame(animate);
             time += 0.01;
 
             if (animationEnabled) {
-                // Animate castle - gentle floating motion
                 if (castleGroup) {
                     castleGroup.rotation.y += 0.001;
                     castleGroup.position.y = Math.sin(time * 0.5) * 0.5;
                 }
 
-                // Animate aurora - wave motion
                 if (auroraEnabled && auroraPlane) {
                     const vertices = auroraPlane.geometry.attributes.position.array;
                     for (let i = 0; i < vertices.length; i += 3) {
@@ -579,49 +713,96 @@
                     auroraPlane.material.opacity = 0.2 + Math.sin(time * 0.5) * 0.1;
                 }
 
-                // Animate snow particles
                 if (snowEnabled && snowParticles) {
                     const positions = snowParticles.geometry.attributes.position.array;
                     const velocities = snowParticles.geometry.velocities;
-
                     for (let i = 0; i < positions.length; i += 3) {
                         positions[i] += velocities[i / 3].x;
                         positions[i + 1] += velocities[i / 3].y;
                         positions[i + 2] += velocities[i / 3].z;
 
-                        // Reset particle when it falls below ground
                         if (positions[i + 1] < 0) {
-                            positions[i + 1] = 100;
-                            positions[i] = Math.random() * 200 - 100;
-                            positions[i + 2] = Math.random() * 200 - 100;
+                            let nx, ny, nz;
+                            do {
+                                nx = Math.random() * 200 - 100;
+                                ny = 100;
+                                nz = Math.random() * 200 - 100;
+                            } while (Math.sqrt(nx * nx + nz * nz) < castleExclusionRadius);
+                            positions[i] = nx;
+                            positions[i + 1] = ny;
+                            positions[i + 2] = nz;
                         }
                     }
                     snowParticles.geometry.attributes.position.needsUpdate = true;
                 }
 
-                // Animate lake reflection
-                if (lake) {
-                    lake.material.opacity = 0.6 + Math.sin(time * 0.3) * 0.1;
-                }
+                if (lake) lake.material.opacity = 0.6 + Math.sin(time * 0.3) * 0.1;
 
-                // Animate castle lights
                 if (lightsEnabled && castleLight1) {
                     castleLight1.intensity = 1.5 + Math.sin(time * 2) * 0.3;
                     castleLight2.intensity = 1.2 + Math.cos(time * 1.5) * 0.3;
                 }
 
-                // Animate aurora light
-                if (auroraLight) {
-                    auroraLight.intensity = 0.5 + Math.sin(time * 0.8) * 0.2;
-                }
+                if (auroraLight) auroraLight.intensity = 0.5 + Math.sin(time * 0.8) * 0.2;
+
+                updateLanterns();
+                updateSnowmen();
+                updateReindeers();
+                updateImageCharacters();
             }
 
             renderer.render(scene, camera);
         }
 
-        // ============================================
-        // EVENT LISTENERS - Keyboard controls
-        // ============================================
+        function updateLanterns() {
+            lanterns.forEach(l => {
+                const flick = l.baseIntensity + Math.sin(time * l.flickerSpeed + Math.random()) * 0.12;
+                l.light.intensity = flick;
+                l.group.position.y = Math.sin(time * 0.5 + l.flickerSpeed) * 0.03;
+            });
+        }
+
+        function updateSnowmen() {
+            snowmen.forEach(s => {
+                s.group.position.y = s.baseY + Math.sin(time * s.bobSpeed + s.bobOffset) * 0.08;
+            });
+        }
+
+        function updateReindeers() {
+            reindeers.forEach(r => {
+                r.walkPhase += r.walkSpeed * 0.015;
+                
+                const dx = Math.cos(r.direction) * 0.05;
+                const dz = Math.sin(r.direction) * 0.05;
+                r.group.position.x += dx;
+                r.group.position.z += dz;
+
+                if (r.group.position.x > 85 || r.group.position.x < -15 || 
+                    r.group.position.z > 85 || r.group.position.z < -15) {
+                    r.direction += Math.PI + (Math.random() - 0.5) * 0.5;
+                }
+
+                r.group.rotation.y = r.direction;
+
+                r.group.position.y = Math.abs(Math.sin(r.walkPhase * 2)) * 0.15;
+
+                r.legs.forEach((leg, idx) => {
+                    const legPhase = r.walkPhase + (idx % 2) * Math.PI;
+                    leg.rotation.x = Math.sin(legPhase * 2) * 0.4;
+                });
+
+                r.noseLight.intensity = 0.8 + Math.sin(time * 5 + r.id) * 0.3;
+            });
+        }
+
+        function updateImageCharacters() {
+            characters.forEach(c => {
+                if (c.mesh) {
+                    c.mesh.lookAt(camera.position);
+                }
+            });
+        }
+
         function setupEventListeners() {
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
@@ -630,10 +811,13 @@
             });
 
             window.addEventListener('keydown', (e) => {
-                switch(e.key.toLowerCase()) {
-                    case ' ':
-                        animationEnabled = !animationEnabled;
-                        break;
+                const key = e.key.toLowerCase();
+                if (e.code === 'Space' || key === ' ') {
+                    animationEnabled = !animationEnabled;
+                    e.preventDefault();
+                    return;
+                }
+                switch (key) {
                     case 'a':
                         auroraEnabled = !auroraEnabled;
                         if (auroraPlane) auroraPlane.visible = auroraEnabled;
@@ -646,14 +830,24 @@
                         lightsEnabled = !lightsEnabled;
                         if (castleLight1) castleLight1.visible = lightsEnabled;
                         if (castleLight2) castleLight2.visible = lightsEnabled;
+                        lanterns.forEach(l => l.group.visible = lightsEnabled);
+                        break;
+                    case 'r':
+                        const visibleR = !reindeers[0]?.group.visible;
+                        reindeers.forEach(r => r.group.visible = visibleR);
+                        break;
+                    case 'm':
+                        const visibleM = !snowmen[0]?.group.visible;
+                        snowmen.forEach(s => s.group.visible = visibleM);
+                        break;
+                    case 'd':
+                        actorsEnabled = !actorsEnabled;
+                        if (actorsGroup) actorsGroup.visible = actorsEnabled;
                         break;
                 }
             });
         }
 
-        // ============================================
-        // START THE APPLICATION
-        // ============================================
         window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
