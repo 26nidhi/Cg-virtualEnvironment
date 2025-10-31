@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Frozen 3D Environment — Lab1 (Enhanced Actors)</title>
+    <title>Frozen 3D Environment — Lab3 (Enhanced Actors + Interactions)</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -21,7 +21,7 @@
             padding: 20px;
             border-radius: 10px;
             font-size: 14px;
-            max-width: 380px;
+            max-width: 420px;
             backdrop-filter: blur(10px);
             border: 2px solid rgba(168,216,255,0.3);
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
@@ -33,6 +33,9 @@
         .spinner { border: 4px solid rgba(168,216,255,0.3); border-top: 4px solid #a8d8ff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #legend { margin-top: 10px; font-size: 12px; color: #8ab8e6; }
+        #debug { margin-top: 10px; font-size: 11px; color: #6ab8ff; font-family: monospace; }
+        .on { color: #0f0; font-weight: bold; }
+        .off { color: #f66; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -44,18 +47,24 @@
     </div>
 
     <div id="info-panel">
-        <h2>❄ Frozen 3D Environment — Lab1</h2>
+        <h2>❄ Frozen 3D Environment — Lab3</h2>
         <p><span class="control-key">Mouse</span> - Rotate & Zoom</p>
         <p><span class="control-key">Space</span> - Toggle Animation</p>
         <p><span class="control-key">A</span> - Toggle Aurora</p>
         <p><span class="control-key">S</span> - Toggle Snow</p>
         <p><span class="control-key">L</span> - Toggle Lights</p>
-        <p><span class="control-key">R</span> - Toggle Reindeers (actors)</p>
-        <p><span class="control-key">M</span> - Toggle Snowmen (actors)</p>
+        <p><span class="control-key">I</span> - Toggle Interactions</p>
+        <p><span class="control-key">R</span> - Toggle Reindeers</p>
+        <p><span class="control-key">M</span> - Toggle Snowmen</p>
         <p><span class="control-key">D</span> - Toggle All Actors</p>
         <div id="legend">
-            Actors: exactly 3 Reindeers (animated with walking motion), Snowmen, Lanterns, Ice sculptures, Olaf and Anna (image characters).
-            Snow spawn is blocked inside the castle area.
+            Actors: 3 Reindeers with AI behaviors, Snowmen, Lanterns, Ice sculptures, Anna character.
+            <strong>NEW:</strong> Reindeers approach Anna, circle her with realistic tree collision avoidance!
+        </div>
+        <div id="debug">
+            <strong>LIVE DEBUG:</strong><br>
+            Interactions: <span id="int-status" class="on">ON</span><br>
+            <span id="reindeer-status"></span>
         </div>
     </div>
 
@@ -68,6 +77,7 @@
         let auroraEnabled = true;
         let snowEnabled = true;
         let lightsEnabled = true;
+        let interactionsEnabled = true;
         let time = 0;
 
         let ambientLight, directionalLight, castleLight1, castleLight2, auroraLight;
@@ -77,12 +87,24 @@
         let snowmen = [];
         let lanterns = [];
         let characters = [];
+        let anna = null;
         let actorsEnabled = true;
 
         const castleExclusionRadius = 18;
 
-        const OLAF_URL = 'https://www.shutterstock.com/image-photo/disney-frozen-olaf-600nw-2605595779.jpg';
         const ANNA_URL = 'https://upload.wikimedia.org/wikipedia/en/thumb/8/8a/Anna_Frozen.png/120px-Anna_Frozen.png';
+
+        // STATE MACHINE FOR REINDEERS
+        const STATE = {
+            WANDER: 0,
+            APPROACH: 1,
+            CIRCLE: 2,
+            FOLLOW: 3,
+            GREET: 4,
+            REST: 5
+        };
+
+        const STATE_NAMES = ['WANDER', 'APPROACH', 'CIRCLE', 'FOLLOW', 'GREET', 'REST'];
 
         function init() {
             scene = new THREE.Scene();
@@ -283,6 +305,9 @@
             const treeMaterial = new THREE.MeshPhongMaterial({ color: 0x1a4d2e, shininess: 5 });
             const snowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 30 });
 
+            // Store tree positions for collision detection
+            window.treePositions = [];
+
             for (let i = 0; i < 30; i++) {
                 const treeGroup = new THREE.Group();
                 const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.8, 5, 8);
@@ -304,13 +329,25 @@
                 }
 
                 let x, z;
+                let distToCenter, distToAnna;
                 do {
                     x = Math.random() * 120 - 60;
                     z = Math.random() * 120 - 60;
-                } while (Math.abs(x) < 25 && Math.abs(z) < 25);
+                    // Avoid castle center area AND clear large area around Anna at (0, 0, 35)
+                    distToCenter = Math.sqrt(x * x + z * z);
+                    distToAnna = Math.sqrt(x * x + (z - 35) * (z - 35));
+                } while ((Math.abs(x) < 25 && Math.abs(z) < 25) || distToAnna < 25);
 
                 treeGroup.position.set(x, 0, z);
                 treeGroup.scale.setScalar(0.8 + Math.random() * 0.4);
+                
+                // Store tree position and radius for collision
+                window.treePositions.push({
+                    x: x,
+                    z: z,
+                    radius: 3.5 * treeGroup.scale.x // Collision radius based on tree size
+                });
+                
                 scene.add(treeGroup);
             }
         }
@@ -411,43 +448,43 @@
 
             snowParticles = new THREE.Points(particles, particleMaterial);
             scene.add(snowParticles);
-        }function createActors() {
-    actorsGroup = new THREE.Group();
-    scene.add(actorsGroup);
+        }
 
-    const lanternPositions = [
-        [-18, 0, -10], [-10, 0, -18], [10, 0, -18], [18, 0, -10],
-        [-18, 0, 10],  [-10, 0, 18],  [10, 0, 18],  [18, 0, 10]
-    ];
-    lanternPositions.forEach(p => {
-        lanterns.push(createLantern(new THREE.Vector3(p[0], 0, p[2])));
-    });
+        function createActors() {
+            actorsGroup = new THREE.Group();
+            scene.add(actorsGroup);
 
-    // Snowmen positioned outside the four tower pillars of the castle
-    // Castle towers are at positions: [-8, -8], [8, -8], [-8, 8], [8, 8]
-    // Place snowmen just outside each tower
-    snowmen.push(createSnowman(new THREE.Vector3(-15, 0, -15))); // outside back-left tower
-    snowmen.push(createSnowman(new THREE.Vector3(15, 0, -15)));  // outside back-right tower
-    snowmen.push(createSnowman(new THREE.Vector3(-15, 0, 15)));  // outside front-left tower
-    snowmen.push(createSnowman(new THREE.Vector3(15, 0, 15)));   // outside front-right tower
+            const lanternPositions = [
+                [-18, 0, -10], [-10, 0, -18], [10, 0, -18], [18, 0, -10],
+                [-18, 0, 10],  [-10, 0, 18],  [10, 0, 18],  [18, 0, 10]
+            ];
+            lanternPositions.forEach(p => {
+                lanterns.push(createLantern(new THREE.Vector3(p[0], 0, p[2])));
+            });
 
-    // Reindeers near the lake area (right side), walking around
-    reindeers.push(createReindeer(new THREE.Vector3(50, 0, 40), 0));
-    reindeers.push(createReindeer(new THREE.Vector3(30, 0, 50), 1));
-    reindeers.push(createReindeer(new THREE.Vector3(45, 0, 30), 2));
+            snowmen.push(createSnowman(new THREE.Vector3(-15, 0, -15)));
+            snowmen.push(createSnowman(new THREE.Vector3(15, 0, -15)));
+            snowmen.push(createSnowman(new THREE.Vector3(-15, 0, 15)));
+            snowmen.push(createSnowman(new THREE.Vector3(15, 0, 15)));
 
-    // Anna positioned clearly in front, away from trees (trees avoid center 25x25 area)
-    characters.push(createImageCharacter(ANNA_URL, new THREE.Vector3(0, 0, 18), 11));
+            // Reindeers starting positions (near the lake area)
+            reindeers.push(createReindeer(new THREE.Vector3(50, 0, 40), 0, true));  // Leader
+            reindeers.push(createReindeer(new THREE.Vector3(30, 0, 50), 1, false));
+            reindeers.push(createReindeer(new THREE.Vector3(45, 0, 30), 2, false));
 
-    placeIceSculpturesAroundCastle();
+            // Anna positioned FAR in front of castle in wide open area - clearly visible
+            anna = createImageCharacter(ANNA_URL, new THREE.Vector3(0, 0, 35), 11);
+            characters.push(anna);
 
-    lanterns.forEach(l => actorsGroup.add(l.group));
-    snowmen.forEach(s => actorsGroup.add(s.group));
-    reindeers.forEach(r => actorsGroup.add(r.group));
-    characters.forEach(c => actorsGroup.add(c.group));
+            placeIceSculpturesAroundCastle();
 
-    actorsGroup.visible = actorsEnabled;
-}
+            lanterns.forEach(l => actorsGroup.add(l.group));
+            snowmen.forEach(s => actorsGroup.add(s.group));
+            reindeers.forEach(r => actorsGroup.add(r.group));
+            characters.forEach(c => actorsGroup.add(c.group));
+
+            actorsGroup.visible = actorsEnabled;
+        }
 
         function createLantern(position) {
             const group = new THREE.Group();
@@ -525,11 +562,11 @@
             return { group, baseY: group.position.y, bobOffset: Math.random() * Math.PI, bobSpeed: 1 + Math.random() * 1.5 };
         }
 
-        function createReindeer(position, id) {
+        function createReindeer(position, id, isLeader) {
             const group = new THREE.Group();
             group.position.copy(position);
 
-            const bodyMat = new THREE.MeshPhongMaterial({ color: 0x8B4513, shininess: 30 });
+            const bodyMat = new THREE.MeshPhongMaterial({ color: isLeader ? 0xaa6633 : 0x8B4513, shininess: 30 });
             const darkMat = new THREE.MeshPhongMaterial({ color: 0x654321, shininess: 20 });
             const noseMat = new THREE.MeshPhongMaterial({ color: 0xff3333, emissive: 0xff0000, emissiveIntensity: 0.5 });
             const antlerMat = new THREE.MeshPhongMaterial({ color: 0xd2b48c, shininess: 10 });
@@ -643,10 +680,14 @@
                 group,
                 legs,
                 noseLight,
+                isLeader,
+                state: STATE.WANDER,
+                stateTimer: 0,
+                direction: Math.random() * Math.PI * 2,
                 walkPhase: Math.random() * Math.PI * 2,
                 walkSpeed: 0.8 + Math.random() * 0.4,
-                direction: Math.random() * Math.PI * 2,
-                bobOffset: Math.random() * Math.PI,
+                circleAngle: 0,
+                greetTarget: null,
                 id
             };
         }
@@ -696,7 +737,7 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            time += 0.01;
+            time += 0.016;
 
             if (animationEnabled) {
                 if (castleGroup) {
@@ -747,7 +788,7 @@
 
                 updateLanterns();
                 updateSnowmen();
-                updateReindeers();
+                updateReindeersWithInteractions();
                 updateImageCharacters();
             }
 
@@ -768,31 +809,305 @@
             });
         }
 
-        function updateReindeers() {
-            reindeers.forEach(r => {
-                r.walkPhase += r.walkSpeed * 0.015;
-                
-                const dx = Math.cos(r.direction) * 0.05;
-                const dz = Math.sin(r.direction) * 0.05;
-                r.group.position.x += dx;
-                r.group.position.z += dz;
+        function updateReindeersWithInteractions() {
+            if (!anna) return;
 
-                if (r.group.position.x > 85 || r.group.position.x < -15 || 
-                    r.group.position.z > 85 || r.group.position.z < -15) {
-                    r.direction += Math.PI + (Math.random() - 0.5) * 0.5;
+            const annaPos = anna.group.position;
+            const leader = reindeers.find(r => r.isLeader);
+
+            reindeers.forEach(r => {
+                const pos = r.group.position;
+                r.stateTimer++;
+
+                if (!interactionsEnabled) {
+                    // Simple wandering without AI
+                    r.walkPhase += 0.02;
+                    const newX = pos.x + Math.cos(r.direction) * 0.08;
+                    const newZ = pos.z + Math.sin(r.direction) * 0.08;
+                    
+                    // Check tree collision
+                    let collision = false;
+                    if (window.treePositions) {
+                        for (let tree of window.treePositions) {
+                            const dist = Math.sqrt((newX - tree.x) ** 2 + (newZ - tree.z) ** 2);
+                            if (dist < tree.radius + 2) {
+                                collision = true;
+                                r.direction += Math.PI / 4;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!collision) {
+                        pos.x = newX;
+                        pos.z = newZ;
+                    }
+                    
+                    if (Math.random() < 0.02) r.direction += (Math.random() - 0.5) * 0.5;
+                    r.group.rotation.y = r.direction;
+                    animateWalk(r);
+                    keepInBounds(r);
+                    return;
                 }
 
+                // Calculate distance to Anna
+                const distToAnna = Math.sqrt(
+                    (pos.x - annaPos.x) ** 2 + (pos.z - annaPos.z) ** 2
+                );
+
+                // STATE MACHINE LOGIC
+                if (r.state === STATE.WANDER) {
+                    // Random walking with smooth turns (no instant 180 degree turns)
+                    if (Math.random() < 0.02) {
+                        r.direction += (Math.random() - 0.5) * 0.3; // Smaller turn angles
+                    }
+
+                    // Check if Anna is nearby
+                    if (distToAnna < 35) {
+                        r.state = STATE.APPROACH;
+                        r.stateTimer = 0;
+                    }
+                    // Leader rests sometimes
+                    else if (r.isLeader && Math.random() < 0.005) {
+                        r.state = STATE.REST;
+                        r.stateTimer = 0;
+                    }
+                    // Follow leader
+                    else if (!r.isLeader && leader && Math.random() < 0.01) {
+                        const dL = Math.sqrt(
+                            (pos.x - leader.group.position.x) ** 2 +
+                            (pos.z - leader.group.position.z) ** 2
+                        );
+                        if (dL < 25) {
+                            r.state = STATE.FOLLOW;
+                            r.stateTimer = 0;
+                        }
+                    }
+
+                    move(r, 0.08);
+                }
+                else if (r.state === STATE.APPROACH) {
+                    // Move toward Anna with realistic turning
+                    const dx = annaPos.x - pos.x;
+                    const dz = annaPos.z - pos.z;
+                    const targetDir = Math.atan2(dz, dx);
+                    
+                    // Smooth turning - don't snap instantly
+                    let angleDiff = targetDir - r.direction;
+                    // Normalize angle difference to -PI to PI
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    
+                    // Turn gradually towards target
+                    r.direction += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), 0.08);
+
+                    // Stop at safe distance (8 units) before starting to circle
+                    if (distToAnna < 8) {
+                        r.state = STATE.CIRCLE;
+                        r.circleAngle = Math.atan2(pos.z - annaPos.z, pos.x - annaPos.x);
+                        r.stateTimer = 0;
+                    } else {
+                        move(r, 0.15);
+                    }
+
+                    // Timeout
+                    if (r.stateTimer > 300) {
+                        r.state = STATE.WANDER;
+                        r.stateTimer = 0;
+                    }
+                }
+                else if (r.state === STATE.CIRCLE) {
+                    // Circle around Anna at safe distance
+                    r.circleAngle += 0.015;
+                    const radius = 10; // Keep 10 unit distance from Anna
+                    const targetX = annaPos.x + Math.cos(r.circleAngle) * radius;
+                    const targetZ = annaPos.z + Math.sin(r.circleAngle) * radius;
+
+                    r.direction = Math.atan2(targetZ - pos.z, targetX - pos.x);
+                    
+                    // Check current distance to Anna - maintain safe distance
+                    const currentDistToAnna = Math.sqrt((pos.x - annaPos.x) ** 2 + (pos.z - annaPos.z) ** 2);
+                    
+                    // Only move if we're at safe distance
+                    if (currentDistToAnna > 8) {
+                        // Move closer
+                        const newX = pos.x + Math.cos(r.direction) * 0.1;
+                        const newZ = pos.z + Math.sin(r.direction) * 0.1;
+                        
+                        // Check for tree collision while circling
+                        let collision = false;
+                        if (window.treePositions) {
+                            for (let tree of window.treePositions) {
+                                const dist = Math.sqrt((newX - tree.x) ** 2 + (newZ - tree.z) ** 2);
+                                if (dist < tree.radius + 2) {
+                                    collision = true;
+                                    r.circleAngle += 0.1;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!collision) {
+                            pos.x = newX;
+                            pos.z = newZ;
+                        }
+                    } else {
+                        // Just rotate around, don't move closer
+                        const tangentDir = r.circleAngle + Math.PI / 2;
+                        pos.x += Math.cos(tangentDir) * 0.08;
+                        pos.z += Math.sin(tangentDir) * 0.08;
+                    }
+
+                    // Brighter nose when circling
+                    r.noseLight.intensity = 2 + Math.sin(time * 10) * 0.5;
+
+                    // Stop circling eventually
+                    if (r.stateTimer > 400 || Math.random() < 0.003) {
+                        r.state = STATE.WANDER;
+                        // Turn away smoothly instead of instant 180
+                        r.direction += Math.PI / 4;
+                        r.stateTimer = 0;
+                    }
+                }
+                else if (r.state === STATE.FOLLOW) {
+                    if (leader) {
+                        const dx = leader.group.position.x - pos.x;
+                        const dz = leader.group.position.z - pos.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+
+                        const targetDir = Math.atan2(dz, dx);
+                        
+                        // Smooth turning
+                        let angleDiff = targetDir - r.direction;
+                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                        r.direction += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), 0.08);
+
+                        if (dist > 8) {
+                            move(r, 0.12);
+                        } else if (dist < 5) {
+                            // Turn around smoothly instead of backing up
+                            r.direction += 0.1;
+                        }
+
+                        // Join leader if approaching Anna
+                        if (leader.state === STATE.APPROACH || leader.state === STATE.CIRCLE) {
+                            if (distToAnna < 35) {
+                                r.state = STATE.APPROACH;
+                                r.stateTimer = 0;
+                            }
+                        }
+                    }
+
+                    if (r.stateTimer > 250) {
+                        r.state = STATE.WANDER;
+                        r.stateTimer = 0;
+                    }
+                }
+                else if (r.state === STATE.REST) {
+                    // Resting
+                    r.noseLight.intensity = 0.5 + Math.sin(time * 3) * 0.2;
+                    pos.y = Math.max(0, pos.y - 0.02);
+
+                    // Wake up if Anna comes close
+                    if (distToAnna < 30 && Math.random() < 0.05) {
+                        r.state = STATE.APPROACH;
+                        r.stateTimer = 0;
+                        pos.y = 0;
+                    }
+
+                    if (r.stateTimer > 200) {
+                        r.state = STATE.WANDER;
+                        r.stateTimer = 0;
+                        pos.y = 0;
+                    }
+                }
+
+                // Face direction
                 r.group.rotation.y = r.direction;
 
-                r.group.position.y = Math.abs(Math.sin(r.walkPhase * 2)) * 0.15;
+                // Animate
+                animateWalk(r);
 
-                r.legs.forEach((leg, idx) => {
-                    const legPhase = r.walkPhase + (idx % 2) * Math.PI;
-                    leg.rotation.x = Math.sin(legPhase * 2) * 0.4;
+                // Collision avoidance
+                reindeers.forEach(other => {
+                    if (other !== r) {
+                        const dx = pos.x - other.group.position.x;
+                        const dz = pos.z - other.group.position.z;
+                        const d = Math.sqrt(dx * dx + dz * dz);
+                        if (d < 4) {
+                            pos.x += (dx / d) * 0.1;
+                            pos.z += (dz / d) * 0.1;
+                        }
+                    }
                 });
 
-                r.noseLight.intensity = 0.8 + Math.sin(time * 5 + r.id) * 0.3;
+                keepInBounds(r);
             });
+
+            updateDebug();
+        }
+
+        function move(r, speed) {
+            r.walkPhase += Math.abs(speed) * 0.4;
+            
+            // Always move forward in the direction the reindeer is facing
+            const newX = r.group.position.x + Math.cos(r.direction) * Math.abs(speed);
+            const newZ = r.group.position.z + Math.sin(r.direction) * Math.abs(speed);
+            
+            // Check collision with Anna (treat her as obstacle) - only if anna exists
+            if (anna && anna.group) {
+                const distToAnna = Math.sqrt((newX - anna.group.position.x) ** 2 + (newZ - anna.group.position.z) ** 2);
+                if (distToAnna < 3) { // Don't walk through Anna (3 unit radius)
+                    // Turn away from Anna
+                    const angleAwayFromAnna = Math.atan2(newZ - anna.group.position.z, newX - anna.group.position.x);
+                    r.direction = angleAwayFromAnna;
+                    return; // Don't move this frame
+                }
+            }
+            
+            // Check collision with trees
+            let collision = false;
+            if (window.treePositions) {
+                for (let tree of window.treePositions) {
+                    const dist = Math.sqrt((newX - tree.x) ** 2 + (newZ - tree.z) ** 2);
+                    if (dist < tree.radius + 2) { // 2 = reindeer radius
+                        collision = true;
+                        // Turn to avoid tree instead of stopping
+                        const angleToTree = Math.atan2(tree.z - r.group.position.z, tree.x - r.group.position.x);
+                        // Turn perpendicular to tree direction
+                        r.direction = angleToTree + Math.PI / 2;
+                        break;
+                    }
+                }
+            }
+            
+            // Only move if no collision
+            if (!collision) {
+                r.group.position.x = newX;
+                r.group.position.z = newZ;
+            }
+        }
+
+        function animateWalk(r) {
+            const bob = Math.abs(Math.sin(r.walkPhase)) * 0.2;
+            r.group.position.y = bob;
+
+            r.legs.forEach((leg, i) => {
+                leg.rotation.x = Math.sin(r.walkPhase + i * Math.PI) * 0.3;
+            });
+
+            if (r.state !== STATE.CIRCLE && r.state !== STATE.REST) {
+                r.noseLight.intensity = 1.5 + Math.sin(time * 8) * 0.3;
+            }
+        }
+
+        function keepInBounds(r) {
+            const pos = r.group.position;
+            if (pos.x > 80) pos.x = 80;
+            if (pos.x < -80) pos.x = -80;
+            if (pos.z > 80) pos.z = 80;
+            if (pos.z < -80) pos.z = -80;
         }
 
         function updateImageCharacters() {
@@ -801,6 +1116,20 @@
                     c.mesh.lookAt(camera.position);
                 }
             });
+        }
+
+        function updateDebug() {
+            if (!anna) return;
+            let status = '';
+            reindeers.forEach((r, i) => {
+                const pos = r.group.position;
+                const dist = Math.sqrt(
+                    (pos.x - anna.group.position.x) ** 2 +
+                    (pos.z - anna.group.position.z) ** 2
+                );
+                status += `R${i}${r.isLeader ? '(L)' : ''}: ${STATE_NAMES[r.state]} (${dist.toFixed(0)}m)<br>`;
+            });
+            document.getElementById('reindeer-status').innerHTML = status;
         }
 
         function setupEventListeners() {
@@ -831,6 +1160,19 @@
                         if (castleLight1) castleLight1.visible = lightsEnabled;
                         if (castleLight2) castleLight2.visible = lightsEnabled;
                         lanterns.forEach(l => l.group.visible = lightsEnabled);
+                        break;
+                    case 'i':
+                        interactionsEnabled = !interactionsEnabled;
+                        document.getElementById('int-status').textContent = interactionsEnabled ? 'ON' : 'OFF';
+                        document.getElementById('int-status').className = interactionsEnabled ? 'on' : 'off';
+                        
+                        if (!interactionsEnabled) {
+                            reindeers.forEach(r => {
+                                r.state = STATE.WANDER;
+                                r.stateTimer = 0;
+                                r.greetTarget = null;
+                            });
+                        }
                         break;
                     case 'r':
                         const visibleR = !reindeers[0]?.group.visible;
